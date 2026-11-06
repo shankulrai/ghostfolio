@@ -83,6 +83,10 @@ export class UpdateUserSettingDto {
 
   @IsBoolean()
   @IsOptional()
+  isBaseCurrencyConsentGiven?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
   isExperimentalFeatures?: boolean;
 
   @IsBoolean()

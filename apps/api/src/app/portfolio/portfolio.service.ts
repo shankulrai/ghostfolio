@@ -23,7 +23,9 @@ import { ActivitiesService } from '@ghostfolio/api/services/activities/activitie
 import { BenchmarkService } from '@ghostfolio/api/services/benchmark/benchmark.service';
 import { DataProviderService } from '@ghostfolio/api/services/data-provider/data-provider.service';
 import { ExchangeRateDataService } from '@ghostfolio/api/services/exchange-rate-data/exchange-rate-data.service';
+import { FxRateCacheService } from '@ghostfolio/api/services/fx-rate-cache/fx-rate-cache.service';
 import { I18nService } from '@ghostfolio/api/services/i18n/i18n.service';
+import { PortfolioManagementService } from '@ghostfolio/api/services/portfolio-management/portfolio-management.service';
 import { SymbolProfileService } from '@ghostfolio/api/services/symbol-profile/symbol-profile.service';
 import { UserService } from '@ghostfolio/api/services/user/user.service';
 import {
@@ -133,7 +135,9 @@ export class PortfolioService {
     private readonly currentRateService: CurrentRateService,
     private readonly dataProviderService: DataProviderService,
     private readonly exchangeRateDataService: ExchangeRateDataService,
+    private readonly fxRateCacheService: FxRateCacheService,
     private readonly i18nService: I18nService,
+    private readonly portfolioManagementService: PortfolioManagementService,
     @Inject(REQUEST) private readonly request: RequestWithUser,
     private readonly rulesService: RulesService,
     private readonly symbolProfileService: SymbolProfileService,
@@ -300,13 +304,18 @@ export class PortfolioService {
       this.userService.user({ id: userId })
     ]);
 
-    const userCurrency = this.getUserCurrency(user);
+    const userCurrency = await this.getUserCurrency(user);
 
     return Promise.all(
       accounts.map(async (account) => {
         let activitiesCount = 0;
-        let dividendInBaseCurrency = 0;
-        let interestInBaseCurrency = 0;
+        const incomeConversions: {
+          type: ActivityType;
+          value: number;
+          fromCurrency: string;
+          toCurrency: string;
+          date: Date;
+        }[] = [];
 
         for (const {
           currency,
@@ -323,26 +332,46 @@ export class PortfolioService {
             continue;
           }
 
-          switch (type) {
-            case ActivityType.DIVIDEND:
-              dividendInBaseCurrency +=
-                (await this.exchangeRateDataService.toCurrencyAtDate(
-                  new Big(quantity).mul(unitPrice).toNumber(),
-                  currency ?? SymbolProfile.currency,
-                  userCurrency,
-                  date
-                )) ?? 0;
-              break;
-            case ActivityType.INTEREST:
-              interestInBaseCurrency +=
-                (await this.exchangeRateDataService.toCurrencyAtDate(
-                  new Big(quantity).mul(unitPrice).toNumber(),
-                  currency ?? SymbolProfile.currency,
-                  userCurrency,
-                  date
-                )) ?? 0;
-              break;
+          if (
+            type === ActivityType.DIVIDEND ||
+            type === ActivityType.INTEREST
+          ) {
+            incomeConversions.push({
+              type,
+              value: new Big(quantity).mul(unitPrice).toNumber(),
+              fromCurrency: currency ?? SymbolProfile.currency,
+              toCurrency: userCurrency,
+              date
+            });
           }
+        }
+
+        const converted =
+          await this.exchangeRateDataService.batchConvert(incomeConversions);
+
+        let dividendInBaseCurrency = 0;
+        let interestInBaseCurrency = 0;
+        let unconvertedCount = 0;
+
+        converted.forEach((result, index) => {
+          if (result.convertedValue === null) {
+            unconvertedCount += 1;
+            return;
+          }
+
+          if (incomeConversions[index].type === ActivityType.DIVIDEND) {
+            dividendInBaseCurrency += result.convertedValue;
+          } else {
+            interestInBaseCurrency += result.convertedValue;
+          }
+        });
+
+        if (unconvertedCount > 0) {
+          this.logger.error({
+            event: 'fx_income_unconverted',
+            accountId: account.id,
+            unconvertedCount
+          });
         }
 
         const quantityOfHolding = filterBySymbol
@@ -529,7 +558,7 @@ export class PortfolioService {
     userId: string;
   }): Promise<PortfolioInvestmentsResponse> {
     const user = await this.userService.user({ id: userId });
-    const userCurrency = this.getUserCurrency(user);
+    const userCurrency = await this.getUserCurrency(user);
     const savingsRate = (user.settings?.settings as UserSettings)?.savingsRate;
 
     const { endDate, startDate } = getIntervalFromDateRange({ dateRange });
@@ -625,7 +654,7 @@ export class PortfolioService {
   }): Promise<PortfolioDetails & { hasErrors: boolean }> {
     const user =
       userFromCaller ?? (await this.userService.user({ id: userId }));
-    const userCurrency = this.getUserCurrency(user);
+    const userCurrency = await this.getUserCurrency(user);
 
     const emergencyFund = new Big(
       (user.settings?.settings as UserSettings)?.emergencyFund ?? 0
@@ -879,6 +908,8 @@ export class PortfolioService {
       ({ markets, marketsAdvanced } = this.getAggregatedMarkets(holdings));
     }
 
+    await this.addHoldingFxRates({ holdings, userCurrency });
+
     let summary: PortfolioSummary | undefined;
 
     if (withSummary) {
@@ -895,9 +926,15 @@ export class PortfolioService {
       });
     }
 
+    // REQ-021: Check FX provider status before returning
+    const fxProviderUnavailable =
+      await this.fxRateCacheService.isProviderUnavailable();
+
     return {
       accounts,
+      baseCurrency: userCurrency,
       createdAt,
+      fxProviderUnavailable,
       hasErrors,
       holdings,
       markets,
@@ -905,6 +942,39 @@ export class PortfolioService {
       platforms,
       summary
     };
+  }
+
+  private async addHoldingFxRates({
+    holdings,
+    userCurrency
+  }: {
+    holdings: PortfolioDetails['holdings'];
+    userCurrency: string;
+  }) {
+    const date = new Date();
+    const currencies = [
+      ...new Set(holdings.map(({ assetProfile }) => assetProfile.currency))
+    ];
+
+    const rates = await this.exchangeRateDataService.batchConvert(
+      currencies.map((fromCurrency) => ({
+        date,
+        fromCurrency,
+        toCurrency: userCurrency,
+        value: 1
+      }))
+    );
+
+    const ratesByCurrency = new Map(
+      currencies.map((currency, index) => [currency, rates[index]])
+    );
+
+    for (const holding of holdings) {
+      const rate = ratesByCurrency.get(holding.assetProfile.currency);
+
+      holding.fxRate = rate?.rate ?? null;
+      holding.fallbackRateUsed = rate?.fallbackUsed ?? false;
+    }
   }
 
   public async getHolding({
@@ -917,7 +987,7 @@ export class PortfolioService {
     withExcludedActivities?: boolean;
   } & AssetProfileIdentifier): Promise<PortfolioHoldingResponse> {
     const user = await this.userService.user({ id: userId });
-    const userCurrency = this.getUserCurrency(user);
+    const userCurrency = await this.getUserCurrency(user);
 
     const holdingFilters: Filter[] = [
       { id: dataSource, type: 'DATA_SOURCE' },
@@ -1108,6 +1178,16 @@ export class PortfolioService {
         marketPrice
       );
 
+    // REQ-018/REQ-023: Fetch FX rate metadata for this holding
+    const [fxRateResult] = await this.exchangeRateDataService.batchConvert([
+      {
+        date: new Date(),
+        fromCurrency: currency,
+        toCurrency: userCurrency,
+        value: 1
+      }
+    ]);
+
     return {
       activitiesCount,
       dateOfFirstActivity,
@@ -1136,6 +1216,8 @@ export class PortfolioService {
       dividendYieldPercentWithCurrencyEffect:
         dividendYieldPercentWithCurrencyEffect.toNumber(),
       feeInBaseCurrency: feeInBaseCurrency.toNumber(),
+      fxRate: fxRateResult?.rate ?? null,
+      fallbackRateUsed: fxRateResult?.fallbackUsed ?? false,
       grossPerformance: grossPerformance?.toNumber(),
       grossPerformancePercent: grossPerformancePercentage?.toNumber(),
       grossPerformancePercentWithCurrencyEffect:
@@ -1179,7 +1261,7 @@ export class PortfolioService {
     withExcludedAccounts?: boolean;
   }): Promise<PortfolioPerformanceResponse> {
     const user = await this.userService.user({ id: userId });
-    const userCurrency = this.getUserCurrency(user);
+    const userCurrency = await this.getUserCurrency(user);
 
     const [accountBalanceItems, { activities }] = await Promise.all([
       this.accountBalanceService.getAccountBalanceItems({
@@ -1314,8 +1396,8 @@ export class PortfolioService {
     // impersonated) user, while the translations follow the language of the
     // authenticated user
     const userSettings = resolveUserSettings({
-      impersonationUserSettings: user?.settings?.settings as UserSettings,
-      userSettings: this.request.user.settings.settings as UserSettings
+      impersonationUserSettings: user?.settings?.settings,
+      userSettings: this.request.user.settings.settings
     });
 
     const languageCode = userSettings.language ?? DEFAULT_LANGUAGE_CODE;
@@ -2209,7 +2291,7 @@ export class PortfolioService {
 
     const totalEmergencyFund = this.getTotalEmergencyFund({
       emergencyFundHoldingsValueInBaseCurrency,
-      userSettings: user.settings?.settings as UserSettings
+      userSettings: user.settings?.settings
     });
 
     const dateOfFirstActivity = portfolioCalculator.getStartDate();
@@ -2386,7 +2468,26 @@ export class PortfolioService {
     );
   }
 
-  private getUserCurrency(aUser?: UserWithSettings) {
+  private async getUserCurrency(aUser?: UserWithSettings): Promise<string> {
+    // ARCH-001: Handle transition period when user may not have a Portfolio entity yet
+    // Try to fetch base currency from Portfolio entity first
+    if (aUser?.id) {
+      try {
+        const portfolio =
+          await this.portfolioManagementService.getDefaultPortfolio(aUser.id);
+        if (portfolio) {
+          return portfolio.baseCurrency;
+        }
+      } catch (error) {
+        // Portfolio entity not available - fall through to legacy behavior
+        this.logger.warn({
+          event: 'portfolio_fetch_failed',
+          errorName: error.name
+        });
+      }
+    }
+
+    // Fallback to user settings or system default (backward compatible)
     return aUser?.settings?.settings.baseCurrency ?? DEFAULT_CURRENCY;
   }
 

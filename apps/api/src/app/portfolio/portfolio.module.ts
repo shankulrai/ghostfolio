@@ -11,9 +11,11 @@ import { BenchmarkModule } from '@ghostfolio/api/services/benchmark/benchmark.mo
 import { ConfigurationModule } from '@ghostfolio/api/services/configuration/configuration.module';
 import { DataProviderModule } from '@ghostfolio/api/services/data-provider/data-provider.module';
 import { ExchangeRateDataModule } from '@ghostfolio/api/services/exchange-rate-data/exchange-rate-data.module';
+import { FxRateCacheModule } from '@ghostfolio/api/services/fx-rate-cache/fx-rate-cache.module';
 import { I18nModule } from '@ghostfolio/api/services/i18n/i18n.module';
 import { ImpersonationModule } from '@ghostfolio/api/services/impersonation/impersonation.module';
 import { MarketDataModule } from '@ghostfolio/api/services/market-data/market-data.module';
+import { PortfolioManagementModule } from '@ghostfolio/api/services/portfolio-management/portfolio-management.module';
 import { DataGatheringQueueModule } from '@ghostfolio/api/services/queues/data-gathering/data-gathering.module';
 import { PortfolioSnapshotQueueModule } from '@ghostfolio/api/services/queues/portfolio-snapshot/portfolio-snapshot.module';
 import { RedisCacheModule } from '@ghostfolio/api/services/redis-cache/redis-cache.module';
@@ -42,10 +44,12 @@ import { RulesService } from './rules.service';
     DataGatheringQueueModule,
     DataProviderModule,
     ExchangeRateDataModule,
+    FxRateCacheModule,
     I18nModule,
     ImpersonationModule,
     MarketDataModule,
     PerformanceLoggingModule,
+    PortfolioManagementModule,
     PortfolioSnapshotQueueModule,
     RedactValuesInResponseModule,
     RedisCacheModule,

@@ -21,6 +21,7 @@ export interface UserSettings {
   'filters.symbol'?: string;
   'filters.tags'?: string[];
   holdingsViewMode?: HoldingsViewMode;
+  isBaseCurrencyConsentGiven?: boolean;
   isExperimentalFeatures?: boolean;
   isGhostfolioAiEnabled?: boolean;
   isRestrictedView?: boolean;

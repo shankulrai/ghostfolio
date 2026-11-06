@@ -71,6 +71,7 @@ describe('DataGatheringProcessor', () => {
     dataGatheringProcessor = new DataGatheringProcessor(
       null,
       dataProviderService as any,
+      null,
       marketDataService as any,
       null
     );

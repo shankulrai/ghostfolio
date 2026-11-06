@@ -1,3 +1,5 @@
+import { GfBaseCurrencyOnboardingModalComponent } from '@ghostfolio/client/components/base-currency-onboarding-modal/base-currency-onboarding-modal.component';
+import { PortfolioFacadeService } from '@ghostfolio/client/services/portfolio-facade/portfolio-facade.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import { User } from '@ghostfolio/common/interfaces';
 import { internalRoutes } from '@ghostfolio/common/routes/routes';
@@ -13,6 +15,7 @@ import {
   DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatDialog } from '@angular/material/dialog';
 import { addIcons } from 'ionicons';
 import {
   analyticsOutline,
@@ -21,6 +24,7 @@ import {
   scanOutline,
   swapVerticalOutline
 } from 'ionicons/icons';
+import { take } from 'rxjs/operators';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -34,9 +38,13 @@ export class PortfolioPageComponent {
   public tabs: TabConfiguration[] = [];
   public user: User;
 
+  private hasPromptedBaseCurrencyConsent = false;
+
   public constructor(
     private changeDetectorRef: ChangeDetectorRef,
     private destroyRef: DestroyRef,
+    private dialog: MatDialog,
+    private portfolioFacadeService: PortfolioFacadeService,
     private userService: UserService
   ) {
     this.userService.stateChanged
@@ -73,6 +81,7 @@ export class PortfolioPageComponent {
             }
           ];
           this.user = state.user;
+          this.promptBaseCurrencyConsentIfNeeded();
         }
 
         this.changeDetectorRef.markForCheck();
@@ -85,5 +94,27 @@ export class PortfolioPageComponent {
       scanOutline,
       swapVerticalOutline
     });
+  }
+
+  private promptBaseCurrencyConsentIfNeeded() {
+    if (
+      this.hasPromptedBaseCurrencyConsent ||
+      this.user.settings.isBaseCurrencyConsentGiven
+    ) {
+      return;
+    }
+
+    this.hasPromptedBaseCurrencyConsent = true;
+
+    this.portfolioFacadeService
+      .getPortfolios()
+      .pipe(take(1))
+      .subscribe((portfolios) => {
+        if (portfolios.length === 0) {
+          this.dialog.open(GfBaseCurrencyOnboardingModalComponent, {
+            disableClose: true
+          });
+        }
+      });
   }
 }

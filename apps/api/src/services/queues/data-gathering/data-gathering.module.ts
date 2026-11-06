@@ -2,6 +2,7 @@ import { ConfigurationModule } from '@ghostfolio/api/services/configuration/conf
 import { DataEnhancerModule } from '@ghostfolio/api/services/data-provider/data-enhancer/data-enhancer.module';
 import { DataProviderModule } from '@ghostfolio/api/services/data-provider/data-provider.module';
 import { ExchangeRateDataModule } from '@ghostfolio/api/services/exchange-rate-data/exchange-rate-data.module';
+import { FxRateCacheModule } from '@ghostfolio/api/services/fx-rate-cache/fx-rate-cache.module';
 import { MarketDataModule } from '@ghostfolio/api/services/market-data/market-data.module';
 import { PrismaModule } from '@ghostfolio/api/services/prisma/prisma.module';
 import { PropertyModule } from '@ghostfolio/api/services/property/property.module';
@@ -38,6 +39,7 @@ import { DataGatheringProcessor } from './data-gathering.processor';
     DataEnhancerModule,
     DataProviderModule,
     ExchangeRateDataModule,
+    FxRateCacheModule,
     MarketDataModule,
     PrismaModule,
     PropertyModule,

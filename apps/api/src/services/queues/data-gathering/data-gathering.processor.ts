@@ -1,5 +1,6 @@
 import { DataProviderService } from '@ghostfolio/api/services/data-provider/data-provider.service';
 import { AssetProfileDelistedError } from '@ghostfolio/api/services/data-provider/errors/asset-profile-delisted.error';
+import { FxRateCacheService } from '@ghostfolio/api/services/fx-rate-cache/fx-rate-cache.service';
 import { DataGatheringItem } from '@ghostfolio/api/services/interfaces/interfaces';
 import { MarketDataService } from '@ghostfolio/api/services/market-data/market-data.service';
 import { SymbolProfileService } from '@ghostfolio/api/services/symbol-profile/symbol-profile.service';
@@ -34,6 +35,7 @@ export class DataGatheringProcessor {
   public constructor(
     private readonly dataGatheringService: DataGatheringService,
     private readonly dataProviderService: DataProviderService,
+    private readonly fxRateCacheService: FxRateCacheService,
     private readonly marketDataService: MarketDataService,
     private readonly symbolProfileService: SymbolProfileService
   ) {}
@@ -162,6 +164,12 @@ export class DataGatheringProcessor {
           { in: utc }
         )}`
       );
+
+      // REQ-021: Mark provider success after successful FX data gathering
+      // Only for currency pairs (FX rates), not regular symbols
+      if (symbol.length === 6 && /^[A-Z]{6}$/.test(symbol)) {
+        await this.fxRateCacheService.markProviderSuccess();
+      }
     } catch (error) {
       if (error instanceof AssetProfileDelistedError) {
         await this.symbolProfileService.updateSymbolProfile(
@@ -182,6 +190,12 @@ export class DataGatheringProcessor {
       }
 
       this.logger.error(error.message);
+
+      // REQ-021: Mark provider failure for FX gathering errors
+      // Only for currency pairs (FX rates), not regular symbols
+      if (symbol.length === 6 && /^[A-Z]{6}$/.test(symbol)) {
+        await this.fxRateCacheService.markProviderFailure();
+      }
 
       throw error;
     }

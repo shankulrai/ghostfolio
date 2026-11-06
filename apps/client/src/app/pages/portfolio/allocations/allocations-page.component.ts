@@ -5,7 +5,11 @@ import {
 } from '@ghostfolio/client/components/account-detail-dialog/interfaces/interfaces';
 import { ImpersonationStorageService } from '@ghostfolio/client/services/impersonation-storage.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
-import { MAX_TOP_HOLDINGS, UNKNOWN_KEY } from '@ghostfolio/common/config';
+import {
+  DEFAULT_CURRENCY,
+  MAX_TOP_HOLDINGS,
+  UNKNOWN_KEY
+} from '@ghostfolio/common/config';
 import {
   canOpenHoldingDetail,
   convertValuesToPercentagesOfTotal,
@@ -343,6 +347,7 @@ export class GfAllocationsPageComponent implements OnInit {
     this.platforms = {};
     this.portfolioDetails = {
       accounts: {},
+      baseCurrency: DEFAULT_CURRENCY,
       createdAt: new Date(),
       holdings: [],
       platforms: {},

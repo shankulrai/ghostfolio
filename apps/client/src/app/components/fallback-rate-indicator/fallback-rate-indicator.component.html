@@ -1,0 +1,11 @@
+<mat-icon
+  *ngIf="fallbackUsed"
+  class="fallback-warning-icon"
+  [matTooltip]="
+    'Rate from ' +
+    (fallbackDate | date: 'mediumDate') +
+    ' (previous business day)'
+  "
+>
+  warning
+</mat-icon>
