@@ -65,6 +65,7 @@ import { SymbolsModule } from './endpoints/symbols/symbols.module';
 import { TagsModule } from './endpoints/tags/tags.module';
 import { UsersModule } from './endpoints/users/users.module';
 import { WatchlistModule } from './endpoints/watchlist/watchlist.module';
+import { PortfolioManagementModule } from './portfolio-management/portfolio-management.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 
 @Module({
@@ -128,6 +129,7 @@ import { PortfolioModule } from './portfolio/portfolio.module';
     MarketDataModule,
     McpModule,
     PlatformsModule,
+    PortfolioManagementModule,
     PortfolioModule,
     PortfolioSnapshotQueueModule,
     PrismaModule,

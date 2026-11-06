@@ -2,6 +2,7 @@ import { isDataGatheringSupported } from '@ghostfolio/api/helper/data-source.hel
 import { DataProviderService } from '@ghostfolio/api/services/data-provider/data-provider.service';
 import { DataEnhancerInterface } from '@ghostfolio/api/services/data-provider/interfaces/data-enhancer.interface';
 import { ExchangeRateDataService } from '@ghostfolio/api/services/exchange-rate-data/exchange-rate-data.service';
+import { FxRateCacheService } from '@ghostfolio/api/services/fx-rate-cache/fx-rate-cache.service';
 import { DataGatheringItem } from '@ghostfolio/api/services/interfaces/interfaces';
 import { MarketDataService } from '@ghostfolio/api/services/market-data/market-data.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
@@ -55,6 +56,7 @@ export class DataGatheringService {
     private readonly dataGatheringQueue: Queue,
     private readonly dataProviderService: DataProviderService,
     private readonly exchangeRateDataService: ExchangeRateDataService,
+    private readonly fxRateCacheService: FxRateCacheService,
     private readonly marketDataService: MarketDataService,
     private readonly prismaService: PrismaService,
     private readonly propertyService: PropertyService,
@@ -337,6 +339,7 @@ export class DataGatheringService {
     symbol
   }: { date: Date } & AssetProfileIdentifier) {
     const startOfUtcDate = getStartOfUtcDate(date);
+    const isExchangeRatePair = this.isExchangeRatePair({ dataSource, symbol });
 
     try {
       const historicalData = await this.dataProviderService.getHistoricalRaw({
@@ -344,6 +347,10 @@ export class DataGatheringService {
         from: startOfUtcDate,
         to: startOfUtcDate
       });
+
+      if (isExchangeRatePair) {
+        await this.fxRateCacheService.markProviderSuccess();
+      }
 
       const marketPrice =
         historicalData[getAssetProfileIdentifier({ dataSource, symbol })]?.[
@@ -374,6 +381,10 @@ export class DataGatheringService {
         });
       }
     } catch (error) {
+      if (isExchangeRatePair) {
+        await this.fxRateCacheService.markProviderFailure();
+      }
+
       this.logger.error(error?.message);
     }
 
@@ -459,6 +470,17 @@ export class DataGatheringService {
     );
 
     return job?.remove();
+  }
+
+  private isExchangeRatePair({ dataSource, symbol }: AssetProfileIdentifier) {
+    return this.exchangeRateDataService
+      .getCurrencyPairs()
+      .some((currencyPair) => {
+        return (
+          currencyPair.dataSource === dataSource &&
+          currencyPair.symbol === symbol
+        );
+      });
   }
 
   private async getAssetProfileIdentifiersWithRecentMarketData(): Promise<

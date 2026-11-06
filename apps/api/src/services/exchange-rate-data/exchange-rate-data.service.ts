@@ -1,5 +1,6 @@
 import { LogPerformance } from '@ghostfolio/api/interceptors/performance-logging/performance-logging.interceptor';
 import { DataProviderService } from '@ghostfolio/api/services/data-provider/data-provider.service';
+import { FxRateCacheService } from '@ghostfolio/api/services/fx-rate-cache/fx-rate-cache.service';
 import { DataGatheringItem } from '@ghostfolio/api/services/interfaces/interfaces';
 import { MarketDataService } from '@ghostfolio/api/services/market-data/market-data.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
@@ -12,8 +13,7 @@ import {
 import {
   DATE_FORMAT,
   getAssetProfileIdentifier,
-  getStartOfUtcDateOfYesterday,
-  resetHours
+  getStartOfUtcDateOfYesterday
 } from '@ghostfolio/common/helper';
 import { DataProviderHistoricalResponse } from '@ghostfolio/common/interfaces';
 
@@ -22,8 +22,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   eachDayOfInterval,
   format,
-  isBefore,
   isToday,
+  isWeekend,
   subDays
 } from 'date-fns';
 import { isNumber } from 'lodash-es';
@@ -42,6 +42,7 @@ export class ExchangeRateDataService {
 
   public constructor(
     private readonly dataProviderService: DataProviderService,
+    private readonly fxRateCacheService: FxRateCacheService,
     private readonly marketDataService: MarketDataService,
     private readonly prismaService: PrismaService,
     private readonly propertyService: PropertyService
@@ -71,58 +72,68 @@ export class ExchangeRateDataService {
       return {};
     }
 
+    // REQ-016: Use batchConvert to enable cache, forward-fill, and provider status checking
+    const dates = eachDayOfInterval({ end: endDate, start: startDate });
+    const conversions: {
+      value: number;
+      fromCurrency: string;
+      toCurrency: string;
+      date: Date;
+    }[] = [];
+
+    // Build batch conversion requests for all currency/date combinations
+    for (const currency of currencies) {
+      if (currency === targetCurrency) {
+        continue; // Skip same-currency conversions
+      }
+      for (const date of dates) {
+        conversions.push({
+          value: 1,
+          fromCurrency: currency,
+          toCurrency: targetCurrency,
+          date
+        });
+      }
+    }
+
+    const results = await this.batchConvert(conversions);
+
     const exchangeRatesByCurrency: {
       [currency: string]: { [dateString: string]: number };
     } = {};
 
+    // Initialize maps for each currency
     for (const currency of currencies) {
-      exchangeRatesByCurrency[`${currency}${targetCurrency}`] =
-        await this.getExchangeRates({
-          startDate,
-          currencyFrom: currency,
-          currencyTo: targetCurrency
-        });
+      exchangeRatesByCurrency[`${currency}${targetCurrency}`] = {};
+    }
 
-      const dateStrings = Object.keys(
-        exchangeRatesByCurrency[`${currency}${targetCurrency}`]
-      );
-      const lastDateString = dateStrings.reduce((a, b) => {
-        return a > b ? a : b;
-      }, '');
+    // Populate exchange rates from batch results
+    let resultIndex = 0;
+    for (const currency of currencies) {
+      if (currency === targetCurrency) {
+        // Same currency always has rate of 1
+        for (const date of dates) {
+          exchangeRatesByCurrency[`${currency}${targetCurrency}`][
+            format(date, DATE_FORMAT)
+          ] = 1;
+        }
+        continue;
+      }
 
-      let previousExchangeRate =
-        exchangeRatesByCurrency[`${currency}${targetCurrency}`]?.[
-          lastDateString
-        ] ?? 1;
+      for (const date of dates) {
+        const result = results[resultIndex++];
+        const rate = result.rate ?? 1;
+        exchangeRatesByCurrency[`${currency}${targetCurrency}`][
+          format(date, DATE_FORMAT)
+        ] = rate;
 
-      // Start from the most recent date and fill in missing exchange rates
-      // using the latest available rate
-      for (
-        let date = endDate;
-        !isBefore(date, startDate);
-        date = subDays(resetHours(date), 1)
-      ) {
-        const dateString = format(date, DATE_FORMAT);
-
-        // Check if the exchange rate for the current date is missing
-        if (
-          isNaN(
-            exchangeRatesByCurrency[`${currency}${targetCurrency}`][dateString]
-          )
-        ) {
-          // If missing, fill with the previous exchange rate
-          exchangeRatesByCurrency[`${currency}${targetCurrency}`][dateString] =
-            previousExchangeRate;
-
-          if (currency === DEFAULT_CURRENCY && isBefore(date, new Date())) {
-            this.logger.error(
-              `No exchange rate has been found for ${currency}${targetCurrency} at ${dateString}`
-            );
-          }
-        } else {
-          // If available, update the previous exchange rate
-          previousExchangeRate =
-            exchangeRatesByCurrency[`${currency}${targetCurrency}`][dateString];
+        if (result.rateUnavailable && currency === DEFAULT_CURRENCY) {
+          this.logger.error(
+            `No exchange rate has been found for ${currency}${targetCurrency} at ${format(
+              date,
+              DATE_FORMAT
+            )}`
+          );
         }
       }
     }
@@ -381,143 +392,217 @@ export class ExchangeRateDataService {
     return undefined;
   }
 
-  private async getExchangeRates({
-    currencyFrom,
-    currencyTo,
-    endDate = new Date(),
-    startDate
-  }: {
-    currencyFrom: string;
-    currencyTo: string;
-    endDate?: Date;
-    startDate: Date;
-  }) {
-    const dates = eachDayOfInterval({ end: endDate, start: startDate });
-    const factors: { [dateString: string]: number } = {};
+  /**
+   * Batch currency conversion with grouping optimization.
+   * Groups conversions by (fromCurrency, toCurrency, date) tuple to minimize database queries.
+   * Implements forward-fill strategy for weekend/holiday rates.
+   */
+  public async batchConvert(
+    conversions: {
+      value: number;
+      fromCurrency: string;
+      toCurrency: string;
+      date: Date;
+    }[]
+  ): Promise<
+    {
+      convertedValue: number | null;
+      fxProviderUnavailable: boolean;
+      rate: number | null;
+      rateUnavailable: boolean;
+      fallbackUsed: boolean;
+      fallbackDate?: Date;
+    }[]
+  > {
+    // Group conversions by unique (fromCurrency, toCurrency, date) tuple
+    const grouped = this.groupConversionsByTuple(conversions);
+    const providerUnavailable =
+      await this.fxRateCacheService.isProviderUnavailable();
 
-    if (currencyFrom === currencyTo) {
-      for (const date of dates) {
-        factors[format(date, DATE_FORMAT)] = 1;
+    // Map to store results by tuple key
+    const resultsByTuple = new Map<
+      string,
+      {
+        rate: number | null;
+        rateUnavailable: boolean;
+        fallbackUsed: boolean;
+        fallbackDate?: Date;
       }
+    >();
 
-      return factors;
-    }
+    // Fetch exchange rate for each unique tuple
+    for (const [tupleKey, group] of grouped.entries()) {
+      const { fromCurrency, toCurrency, date } = group.conversions[0];
 
-    const derivedCurrencyFactor =
-      this.derivedCurrencyFactors[`${currencyFrom}${currencyTo}`];
+      // Use existing toCurrencyAtDate method with forward-fill
+      const dataSource =
+        this.dataProviderService.getDataSourceForExchangeRates();
+      const symbol = `${fromCurrency}${toCurrency}`;
 
-    if (derivedCurrencyFactor) {
-      for (const date of dates) {
-        factors[format(date, DATE_FORMAT)] = derivedCurrencyFactor;
-      }
+      let factor: number | undefined;
+      let fallbackUsed = false;
+      let fallbackDate: Date | undefined;
 
-      return factors;
-    }
+      if (fromCurrency === toCurrency) {
+        factor = 1;
+      } else {
+        const cachedRate = await this.fxRateCacheService.getCachedRate(
+          symbol,
+          date
+        );
+        const marketData =
+          cachedRate !== null
+            ? { marketPrice: cachedRate, isCarriedForward: false }
+            : providerUnavailable
+              ? null
+              : await this.marketDataService.get({ dataSource, symbol, date });
 
-    const dataSource = this.dataProviderService.getDataSourceForExchangeRates();
-    const symbol = `${currencyFrom}${currencyTo}`;
+        if (marketData?.marketPrice) {
+          factor = marketData.marketPrice;
+          fallbackUsed = marketData.isCarriedForward || false;
+          if (fallbackUsed) {
+            fallbackDate = date;
+          } else if (cachedRate === null) {
+            await this.fxRateCacheService.setCachedRate(symbol, date, factor);
+          }
+        } else if (!providerUnavailable) {
+          // Forward-fill: previous business days within the 7-day window (weekends skipped)
+          for (let i = 1; i <= 7; i++) {
+            const fallbackDateCandidate = subDays(date, i);
 
-    const marketData = await this.marketDataService.getRange({
-      assetProfileIdentifiers: [
-        {
-          dataSource,
-          symbol
+            if (isWeekend(fallbackDateCandidate)) {
+              continue;
+            }
+
+            const fallbackMarketData = await this.marketDataService.get({
+              dataSource,
+              symbol,
+              date: fallbackDateCandidate
+            });
+
+            if (fallbackMarketData?.marketPrice) {
+              factor = fallbackMarketData.marketPrice;
+              fallbackUsed = true;
+              fallbackDate = fallbackDateCandidate;
+              break;
+            }
+          }
         }
-      ],
-      dateQuery: { gte: startDate, lt: endDate }
+      }
+
+      const rateUnavailable = !isNumber(factor) || isNaN(factor);
+
+      if (rateUnavailable) {
+        this.logger.warn({
+          event: 'fx_rate_unavailable',
+          currencyPair: symbol,
+          date: format(date, DATE_FORMAT)
+        });
+      }
+
+      resultsByTuple.set(tupleKey, {
+        rate: rateUnavailable ? null : factor,
+        rateUnavailable,
+        fallbackUsed,
+        fallbackDate
+      });
+    }
+
+    // Map results back to original order
+    return conversions.map((conversion) => {
+      const tupleKey = this.getTupleKey(
+        conversion.fromCurrency,
+        conversion.toCurrency,
+        conversion.date
+      );
+      const result = resultsByTuple.get(tupleKey) ?? {
+        rate: null,
+        rateUnavailable: true,
+        fallbackUsed: false
+      };
+
+      return {
+        convertedValue:
+          result.rate === null ? null : conversion.value * result.rate,
+        fxProviderUnavailable: providerUnavailable,
+        rate: result.rate,
+        rateUnavailable: result.rateUnavailable,
+        fallbackUsed: result.fallbackUsed,
+        fallbackDate: result.fallbackDate
+      };
+    });
+  }
+
+  /**
+   * Groups conversions by (fromCurrency, toCurrency, date) tuple.
+   * Pure function for testability (COMP-001 mitigation).
+   */
+  private groupConversionsByTuple(
+    conversions: {
+      value: number;
+      fromCurrency: string;
+      toCurrency: string;
+      date: Date;
+    }[]
+  ): Map<
+    string,
+    {
+      fromCurrency: string;
+      toCurrency: string;
+      date: Date;
+      conversions: {
+        value: number;
+        fromCurrency: string;
+        toCurrency: string;
+        date: Date;
+        index: number;
+      }[];
+    }
+  > {
+    const groups = new Map<
+      string,
+      {
+        fromCurrency: string;
+        toCurrency: string;
+        date: Date;
+        conversions: {
+          value: number;
+          fromCurrency: string;
+          toCurrency: string;
+          date: Date;
+          index: number;
+        }[];
+      }
+    >();
+
+    conversions.forEach((conversion, index) => {
+      const key = this.getTupleKey(
+        conversion.fromCurrency,
+        conversion.toCurrency,
+        conversion.date
+      );
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          fromCurrency: conversion.fromCurrency,
+          toCurrency: conversion.toCurrency,
+          date: conversion.date,
+          conversions: []
+        });
+      }
+
+      groups.get(key).conversions.push({ ...conversion, index });
     });
 
-    if (marketData?.length > 0) {
-      for (const { date, marketPrice } of marketData) {
-        factors[format(date, DATE_FORMAT)] = marketPrice;
-      }
-    } else {
-      // Calculate indirectly via base currency
+    return groups;
+  }
 
-      const marketPriceBaseCurrencyFromCurrency: {
-        [dateString: string]: number;
-      } = {};
-      const marketPriceBaseCurrencyToCurrency: {
-        [dateString: string]: number;
-      } = {};
-
-      try {
-        if (currencyFrom === DEFAULT_CURRENCY) {
-          for (const date of dates) {
-            marketPriceBaseCurrencyFromCurrency[format(date, DATE_FORMAT)] = 1;
-          }
-        } else {
-          const marketData = await this.marketDataService.getRange({
-            assetProfileIdentifiers: [
-              {
-                dataSource,
-                symbol: `${DEFAULT_CURRENCY}${currencyFrom}`
-              }
-            ],
-            dateQuery: { gte: startDate, lt: endDate }
-          });
-
-          for (const { date, marketPrice } of marketData) {
-            marketPriceBaseCurrencyFromCurrency[format(date, DATE_FORMAT)] =
-              marketPrice;
-          }
-        }
-      } catch {}
-
-      try {
-        if (currencyTo === DEFAULT_CURRENCY) {
-          for (const date of dates) {
-            marketPriceBaseCurrencyToCurrency[format(date, DATE_FORMAT)] = 1;
-          }
-        } else {
-          const marketData = await this.marketDataService.getRange({
-            assetProfileIdentifiers: [
-              {
-                dataSource,
-                symbol: `${DEFAULT_CURRENCY}${currencyTo}`
-              }
-            ],
-            dateQuery: {
-              gte: startDate,
-              lt: endDate
-            }
-          });
-
-          for (const { date, marketPrice } of marketData) {
-            marketPriceBaseCurrencyToCurrency[format(date, DATE_FORMAT)] =
-              marketPrice;
-          }
-        }
-      } catch {}
-
-      for (const date of dates) {
-        try {
-          const factor =
-            (1 /
-              marketPriceBaseCurrencyFromCurrency[format(date, DATE_FORMAT)]) *
-            marketPriceBaseCurrencyToCurrency[format(date, DATE_FORMAT)];
-
-          if (isNaN(factor)) {
-            throw new Error('Exchange rate is not a number');
-          } else {
-            factors[format(date, DATE_FORMAT)] = factor;
-          }
-        } catch {
-          let errorMessage = `No exchange rate has been found for ${currencyFrom}${currencyTo} at ${format(
-            date,
-            DATE_FORMAT
-          )}. Please complement market data for ${DEFAULT_CURRENCY}${currencyFrom}`;
-
-          if (DEFAULT_CURRENCY !== currencyTo) {
-            errorMessage = `${errorMessage} and ${DEFAULT_CURRENCY}${currencyTo}`;
-          }
-
-          this.logger.error(`${errorMessage}.`);
-        }
-      }
-    }
-
-    return factors;
+  private getTupleKey(
+    fromCurrency: string,
+    toCurrency: string,
+    date: Date
+  ): string {
+    return `${fromCurrency}:${toCurrency}:${format(date, DATE_FORMAT)}`;
   }
 
   private async prepareCurrencies(): Promise<string[]> {

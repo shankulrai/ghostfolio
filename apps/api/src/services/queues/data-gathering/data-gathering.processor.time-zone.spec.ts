@@ -36,6 +36,7 @@ describe('DataGatheringProcessor in a time zone behind UTC', () => {
     dataGatheringProcessor = new DataGatheringProcessor(
       null,
       dataProviderService as any,
+      null,
       marketDataService as any,
       null
     );

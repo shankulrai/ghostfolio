@@ -47,6 +47,14 @@ export const userDummyData = {
   id: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 };
 
+export const fxRateCacheServiceMock = {
+  isProviderUnavailable: jest.fn().mockResolvedValue(false),
+  getCachedRate: jest.fn().mockResolvedValue(null),
+  setCachedRate: jest.fn().mockResolvedValue(undefined),
+  markProviderSuccess: jest.fn().mockResolvedValue(undefined),
+  markProviderFailure: jest.fn().mockResolvedValue(undefined)
+};
+
 /**
  * Returns the last chart item of getPerformance() for each date range
  */

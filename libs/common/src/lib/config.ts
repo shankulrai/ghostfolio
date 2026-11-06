@@ -103,6 +103,15 @@ export const DEFAULT_DATE_RANGE: DateRange = 'max';
 export const DEFAULT_HOST = '0.0.0.0';
 export const DEFAULT_LANGUAGE_CODE = 'en';
 export const DEFAULT_LOCALE = 'en-US';
+
+export const SUPPORTED_BASE_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CHF',
+  'INR'
+] as const;
+export type BaseCurrency = (typeof SUPPORTED_BASE_CURRENCIES)[number];
 export const DEFAULT_OPENROUTER_ENGINE_WEB_FETCH = 'openrouter';
 export const DEFAULT_PAGE_SIZE = 50;
 export const DEFAULT_PORT = 3333;

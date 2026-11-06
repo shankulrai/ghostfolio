@@ -25,6 +25,8 @@ export interface PortfolioPosition {
   };
   dateOfFirstActivity: Date;
   dividend: number;
+  fallbackRateUsed?: boolean;
+  fxRate?: number | null;
   grossPerformance: number;
   grossPerformancePercent: number;
   grossPerformancePercentWithCurrencyEffect: number;

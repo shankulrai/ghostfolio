@@ -40,7 +40,9 @@ describe('PortfolioService', () => {
   let currentRateService: CurrentRateService;
   let dataProviderService: DataProviderService;
   let exchangeRateDataService: ExchangeRateDataService;
+  let fxRateCacheService: any;
   let portfolioCalculatorFactory: PortfolioCalculatorFactory;
+  let portfolioManagementService: any;
   let portfolioService: PortfolioService;
   let symbolProfileService: SymbolProfileService;
   let userService: UserService;
@@ -61,8 +63,21 @@ describe('PortfolioService', () => {
       null,
       null,
       null,
+      null,
       null
     );
+
+    jest
+      .spyOn(exchangeRateDataService, 'batchConvert')
+      .mockImplementation(async (conversions) => {
+        return conversions.map(({ value }) => ({
+          convertedValue: value,
+          fallbackUsed: false,
+          fxProviderUnavailable: false,
+          rate: 1,
+          rateUnavailable: false
+        }));
+      });
 
     accountBalanceService = new AccountBalanceService(
       null,
@@ -121,6 +136,14 @@ describe('PortfolioService', () => {
       null
     );
 
+    portfolioManagementService = {
+      getDefaultPortfolio: jest.fn()
+    };
+
+    fxRateCacheService = {
+      isProviderUnavailable: jest.fn().mockResolvedValue(false)
+    };
+
     portfolioService = new PortfolioService(
       accountBalanceService,
       accountService,
@@ -130,7 +153,9 @@ describe('PortfolioService', () => {
       currentRateService,
       dataProviderService,
       exchangeRateDataService,
+      fxRateCacheService,
       null,
+      portfolioManagementService,
       null,
       null,
       symbolProfileService,
@@ -309,9 +334,15 @@ describe('PortfolioService', () => {
       } as unknown as Awaited<ReturnType<typeof userService.user>>);
 
       jest
-        .spyOn(exchangeRateDataService, 'toCurrencyAtDate')
-        .mockImplementation(async (value) => {
-          return value;
+        .spyOn(exchangeRateDataService, 'batchConvert')
+        .mockImplementation(async (conversions) => {
+          return conversions.map(({ value }) => ({
+            convertedValue: value,
+            rate: 1,
+            fxProviderUnavailable: false,
+            rateUnavailable: false,
+            fallbackUsed: false
+          }));
         });
 
       jest
@@ -328,6 +359,97 @@ describe('PortfolioService', () => {
         dividendInBaseCurrency: 20,
         interestInBaseCurrency: 15
       });
+    });
+
+    it('should attach the FX rate and fallback flag to each holding', async () => {
+      jest
+        .spyOn(exchangeRateDataService, 'batchConvert')
+        .mockResolvedValueOnce([
+          {
+            convertedValue: 1.08,
+            fallbackUsed: true,
+            fxProviderUnavailable: false,
+            rate: 1.08,
+            rateUnavailable: false
+          }
+        ]);
+
+      const holdings = [
+        { assetProfile: { currency: 'EUR' } },
+        { assetProfile: { currency: 'EUR' } }
+      ] as unknown as Parameters<
+        PortfolioService['addHoldingFxRates']
+      >[0]['holdings'];
+
+      await portfolioService['addHoldingFxRates']({
+        holdings,
+        userCurrency: 'USD'
+      });
+
+      expect(holdings).toEqual([
+        expect.objectContaining({ fallbackRateUsed: true, fxRate: 1.08 }),
+        expect.objectContaining({ fallbackRateUsed: true, fxRate: 1.08 })
+      ]);
+    });
+
+    it('should exclude income with unavailable FX rate and log an error', async () => {
+      jest.spyOn(accountService, 'accounts').mockResolvedValue([
+        {
+          activities: [
+            {
+              currency: 'XYZ',
+              date: new Date('2024-01-02'),
+              quantity: 2,
+              SymbolProfile: { currency: 'XYZ' },
+              tags: [],
+              type: 'DIVIDEND',
+              unitPrice: 10
+            }
+          ],
+          balance: 0,
+          currency: 'USD',
+          id: 'account-id',
+          name: 'Account'
+        }
+      ] as unknown as Awaited<ReturnType<typeof accountService.accounts>>);
+
+      jest.spyOn(portfolioService, 'getDetails').mockResolvedValue({
+        accounts: {}
+      } as unknown as Awaited<ReturnType<typeof portfolioService.getDetails>>);
+
+      jest.spyOn(userService, 'user').mockResolvedValue({
+        settings: { settings: { baseCurrency: 'USD' } }
+      } as unknown as Awaited<ReturnType<typeof userService.user>>);
+
+      jest.spyOn(exchangeRateDataService, 'batchConvert').mockResolvedValue([
+        {
+          convertedValue: null,
+          rate: null,
+          fxProviderUnavailable: false,
+          rateUnavailable: true,
+          fallbackUsed: false
+        }
+      ]);
+
+      jest
+        .spyOn(exchangeRateDataService, 'toCurrency')
+        .mockImplementation((value) => {
+          return value;
+        });
+
+      const errorSpy = jest.spyOn(portfolioService['logger'], 'error');
+
+      const [account] = await portfolioService.getAccounts({
+        userId: userDummyData.id
+      });
+
+      expect(account).toMatchObject({ dividendInBaseCurrency: 0 });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'fx_income_unconverted',
+          unconvertedCount: 1
+        })
+      );
     });
   });
 
@@ -1565,6 +1687,111 @@ describe('PortfolioService', () => {
       // 6 * 150 (unit price of the latest activity)
       expect(summary.excludedAccountsAndActivities).toBe(900);
       expect(summary.totalValueInBaseCurrency).toBe(3900);
+    });
+  });
+
+  describe('getUserCurrency', () => {
+    const getUserCurrency = (user: any) => {
+      return (
+        portfolioService as unknown as {
+          getUserCurrency: (aUser: any) => Promise<string>;
+        }
+      ).getUserCurrency(user);
+    };
+
+    it('should return portfolio base currency when portfolio exists (ARCH-001)', async () => {
+      const mockUser = {
+        id: userDummyData.id,
+        settings: {
+          settings: {
+            baseCurrency: 'USD'
+          }
+        }
+      };
+
+      const mockPortfolio = {
+        id: 'portfolio-1',
+        userId: userDummyData.id,
+        name: 'Default',
+        baseCurrency: 'EUR',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      jest
+        .spyOn(
+          portfolioService['portfolioManagementService'],
+          'getDefaultPortfolio'
+        )
+        .mockResolvedValue(mockPortfolio);
+
+      const result = await getUserCurrency(mockUser);
+
+      expect(result).toBe('EUR');
+      expect(
+        portfolioService['portfolioManagementService'].getDefaultPortfolio
+      ).toHaveBeenCalledWith(userDummyData.id);
+    });
+
+    it('should fall back to user settings when portfolio is null (ARCH-001 transition period)', async () => {
+      const mockUser = {
+        id: userDummyData.id,
+        settings: {
+          settings: {
+            baseCurrency: 'USD'
+          }
+        }
+      };
+
+      jest
+        .spyOn(
+          portfolioService['portfolioManagementService'],
+          'getDefaultPortfolio'
+        )
+        .mockResolvedValue(null);
+
+      const result = await getUserCurrency(mockUser);
+
+      expect(result).toBe('USD');
+    });
+
+    it('should fall back to DEFAULT_CURRENCY when portfolio fetch fails (ARCH-001 error handling)', async () => {
+      const mockUser = {
+        id: userDummyData.id,
+        settings: {
+          settings: {
+            baseCurrency: 'USD'
+          }
+        }
+      };
+
+      jest
+        .spyOn(
+          portfolioService['portfolioManagementService'],
+          'getDefaultPortfolio'
+        )
+        .mockRejectedValue(new Error('Database connection failed'));
+
+      const result = await getUserCurrency(mockUser);
+
+      expect(result).toBe('USD');
+    });
+
+    it('should return DEFAULT_CURRENCY when user has no settings and no portfolio (ARCH-001 backward compatible)', async () => {
+      const mockUser = {
+        id: userDummyData.id
+      };
+
+      jest
+        .spyOn(
+          portfolioService['portfolioManagementService'],
+          'getDefaultPortfolio'
+        )
+        .mockResolvedValue(null);
+
+      const result = await getUserCurrency(mockUser);
+
+      expect(result).toBe('USD'); // DEFAULT_CURRENCY
     });
   });
 

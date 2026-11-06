@@ -28,6 +28,8 @@ export interface PortfolioHoldingResponse {
   dividendYieldPercent: number;
   dividendYieldPercentWithCurrencyEffect: number;
   feeInBaseCurrency: number;
+  fxRate?: number;
+  fallbackRateUsed?: boolean;
   grossPerformance: number;
   grossPerformancePercent: number;
   grossPerformancePercentWithCurrencyEffect: number;

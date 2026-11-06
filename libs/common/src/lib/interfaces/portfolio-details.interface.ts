@@ -16,7 +16,10 @@ export interface PortfolioDetails {
       valueInPercentage?: number;
     };
   };
+  baseCurrency: string;
   createdAt: Date;
+  /** REQ-021/AC-021: True when FX provider is unavailable (manual kill switch or sustained outage) */
+  fxProviderUnavailable?: boolean;
   holdings: PortfolioPosition[];
   markets?: {
     [key in Market]: {

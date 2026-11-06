@@ -24,6 +24,7 @@ export interface Environment extends CleanedEnvAccessors {
   ENABLE_FEATURE_FEAR_AND_GREED_INDEX: boolean;
   ENABLE_FEATURE_GATHER_NEW_EXCHANGE_RATES: boolean;
   ENABLE_FEATURE_MCP: boolean;
+  ENABLE_FEATURE_MULTI_CURRENCY: boolean;
   ENABLE_FEATURE_RATE_LIMITING: boolean;
   ENABLE_FEATURE_READ_ONLY_MODE: boolean;
   ENABLE_FEATURE_SECURITY_HEADERS: boolean;
@@ -34,6 +35,7 @@ export interface Environment extends CleanedEnvAccessors {
   GOOGLE_SECRET: string;
   GOOGLE_SHEETS_ACCOUNT: string;
   GOOGLE_SHEETS_ID: string;
+  FX_PROVIDER_KILL_SWITCH: boolean;
   GOOGLE_SHEETS_PRIVATE_KEY: string;
   JWT_SECRET_KEY: string;
   MAX_ACTIVITIES_TO_IMPORT: number;

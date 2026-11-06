@@ -202,6 +202,13 @@ exports[`AppModule should keep the security of each route 1`] = `
     "interceptors": [],
     "permission": "deletePlatform",
   },
+  "DELETE /portfolio-management/:id": {
+    "guards": [
+      "AuthGuard('jwt')",
+      "MultiCurrencyFeatureGuard",
+    ],
+    "interceptors": [],
+  },
   "DELETE /tags/:id": {
     "allowDuringImpersonation": true,
     "guards": [
@@ -707,8 +714,16 @@ exports[`AppModule should keep the security of each route 1`] = `
     "interceptors": [],
     "permission": "readPlatforms",
   },
+  "GET /portfolio-management": {
+    "guards": [
+      "AuthGuard('jwt')",
+      "MultiCurrencyFeatureGuard",
+    ],
+    "interceptors": [],
+  },
   "GET /portfolio/details": {
     "guards": [
+      "MultiCurrencyFeatureGuard",
       "AuthGuard('jwt')",
       "HasPermissionGuard",
       "ImpersonationGuard",
@@ -1284,6 +1299,13 @@ exports[`AppModule should keep the security of each route 1`] = `
     "interceptors": [],
     "permission": "createPlatform",
   },
+  "POST /portfolio-management": {
+    "guards": [
+      "AuthGuard('jwt')",
+      "MultiCurrencyFeatureGuard",
+    ],
+    "interceptors": [],
+  },
   "POST /subscription/redeem-coupon": {
     "allowDuringImpersonation": true,
     "guards": [
@@ -1448,6 +1470,13 @@ exports[`AppModule should keep the security of each route 1`] = `
     ],
     "interceptors": [],
     "permission": "updatePlatform",
+  },
+  "PUT /portfolio-management/:id/base-currency": {
+    "guards": [
+      "AuthGuard('jwt')",
+      "MultiCurrencyFeatureGuard",
+    ],
+    "interceptors": [],
   },
   "PUT /portfolio/holding/:dataSource/:symbol/tags": {
     "guards": [

@@ -1,0 +1,27 @@
+<div mat-dialog-title>
+  <h2>Select Your Base Currency</h2>
+</div>
+
+<mat-dialog-content>
+  <p class="mb-4">
+    Please select your preferred base currency for portfolio valuation. All
+    holdings will be converted to this currency for consistent reporting.
+  </p>
+
+  <gf-base-currency-selector
+    [disabled]="isSubmitting"
+    [selectedCurrency]="selectedCurrency"
+    (currencyChange)="onCurrencyChange($event)"
+  ></gf-base-currency-selector>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    color="primary"
+    mat-raised-button
+    [disabled]="isSubmitDisabled"
+    (click)="onSubmit()"
+  >
+    {{ isSubmitting ? 'Saving...' : 'Continue' }}
+  </button>
+</mat-dialog-actions>

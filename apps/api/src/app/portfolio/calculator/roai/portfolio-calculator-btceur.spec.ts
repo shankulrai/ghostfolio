@@ -2,7 +2,8 @@ import {
   activityDummyData,
   assetProfileDummyData,
   loadExportFile,
-  userDummyData
+  userDummyData,
+  fxRateCacheServiceMock
 } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator-test-utils';
 import { PortfolioCalculatorFactory } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator.factory';
 import { CurrentRateService } from '@ghostfolio/api/app/portfolio/current-rate.service';
@@ -73,6 +74,7 @@ describe('PortfolioCalculator', () => {
 
     exchangeRateDataService = new ExchangeRateDataService(
       null,
+      fxRateCacheServiceMock as any,
       null,
       null,
       null

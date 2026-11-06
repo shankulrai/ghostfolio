@@ -3,7 +3,10 @@
  * @jest-environment-options {"timeZone": "America/New_York"}
  */
 import { PortfolioCalculator } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator';
-import { userDummyData } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator-test-utils';
+import {
+  userDummyData,
+  fxRateCacheServiceMock
+} from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator-test-utils';
 import { PortfolioCalculatorFactory } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator.factory';
 import { CurrentRateService } from '@ghostfolio/api/app/portfolio/current-rate.service';
 import { CurrentRateServiceMock } from '@ghostfolio/api/app/portfolio/current-rate.service.mock';
@@ -84,6 +87,7 @@ describe('PortfolioCalculator', () => {
 
     exchangeRateDataService = new ExchangeRateDataService(
       null,
+      fxRateCacheServiceMock as any,
       null,
       null,
       null

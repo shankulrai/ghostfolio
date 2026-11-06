@@ -1,6 +1,7 @@
 import { HasPermission } from '@ghostfolio/api/decorators/has-permission.decorator';
 import { Impersonation } from '@ghostfolio/api/decorators/impersonation.decorator';
 import { RequiresScope } from '@ghostfolio/api/decorators/requires-scope.decorator';
+import { MultiCurrencyFeatureGuard } from '@ghostfolio/api/guards/multi-currency-feature.guard';
 import {
   hasNotDefinedValuesInObject,
   nullifyValuesInObject,
@@ -43,6 +44,7 @@ import {
   Param,
   Put,
   Query,
+  UseGuards,
   UseInterceptors,
   Version
 } from '@nestjs/common';
@@ -71,6 +73,7 @@ export class PortfolioController {
 
   @Get('details')
   @RequiresScope(scopes.portfolioRead)
+  @UseGuards(MultiCurrencyFeatureGuard)
   @UseInterceptors(RedactValuesInResponseInterceptor)
   @UseInterceptors(TransformDataSourceInRequestInterceptor)
   @UseInterceptors(TransformDataSourceInResponseInterceptor)
@@ -106,7 +109,9 @@ export class PortfolioController {
 
     const {
       accounts,
+      baseCurrency,
       createdAt,
+      fxProviderUnavailable,
       hasErrors,
       holdings,
       markets,
@@ -213,7 +218,9 @@ export class PortfolioController {
 
     return {
       accounts,
+      baseCurrency,
       createdAt,
+      fxProviderUnavailable,
       hasError,
       holdings,
       platforms,
