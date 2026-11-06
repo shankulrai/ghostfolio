@@ -2,8 +2,10 @@ import { CryptocurrencyService } from '@ghostfolio/api/services/cryptocurrency/c
 import { YahooFinanceDataEnhancerService } from '@ghostfolio/api/services/data-provider/data-enhancer/yahoo-finance/yahoo-finance.service';
 import { AssetProfileDelistedError } from '@ghostfolio/api/services/data-provider/errors/asset-profile-delisted.error';
 import {
+  CorporateActionsResult,
   DataProviderInterface,
   GetAssetProfileParams,
+  GetCorporateActionsParams,
   GetDividendsParams,
   GetHistoricalParams,
   GetQuotesParams,
@@ -364,6 +366,104 @@ export class YahooFinanceService implements DataProviderInterface {
     }
 
     return { items };
+  }
+
+  public async getCorporateActions({
+    from,
+    symbol,
+    to
+  }: GetCorporateActionsParams): Promise<CorporateActionsResult> {
+    try {
+      const chartResult = await this.yahooFinance.chart(
+        this.yahooFinanceDataEnhancerService.convertToYahooFinanceSymbol(
+          symbol
+        ),
+        {
+          events: 'div|split',
+          interval: '1d',
+          period1: format(from, DATE_FORMAT),
+          period2: format(
+            isSameDay(from, to) ? addDays(to, 1) : to,
+            DATE_FORMAT
+          )
+        }
+      );
+
+      const splits = [];
+      const dividends = [];
+      const mergers = [];
+      let rejectedCount = 0;
+
+      if (chartResult.events?.splits) {
+        for (const split of chartResult.events.splits) {
+          if (
+            split.date instanceof Date &&
+            !isNaN(split.date.getTime()) &&
+            Number.isInteger(split.numerator) &&
+            Number.isInteger(split.denominator) &&
+            split.numerator > 0 &&
+            split.denominator > 0
+          ) {
+            splits.push({
+              date: split.date,
+              numerator: split.numerator,
+              denominator: split.denominator
+            });
+          } else {
+            rejectedCount++;
+          }
+        }
+      }
+
+      if (chartResult.events?.dividends) {
+        for (const dividend of chartResult.events.dividends) {
+          if (
+            dividend.date instanceof Date &&
+            !isNaN(dividend.date.getTime()) &&
+            Number.isFinite(dividend.amount) &&
+            dividend.amount > 0
+          ) {
+            dividends.push({
+              date: dividend.date,
+              amountPerShare: dividend.amount
+            });
+          } else {
+            rejectedCount++;
+          }
+        }
+      }
+
+      if (rejectedCount > 0) {
+        this.logger.warn(
+          `Rejected ${rejectedCount} malformed corporate action entries for ${symbol} (${this.getName()})`
+        );
+      }
+
+      return { dividends, mergers, splits };
+    } catch (error) {
+      const message = `Could not get corporate actions for ${symbol} (${this.getName()}) from ${format(
+        from,
+        DATE_FORMAT
+      )} to ${format(to, DATE_FORMAT)}`;
+
+      if (error?.message === YahooFinanceService.DELISTED_ERROR_MESSAGE) {
+        this.logger.warn(
+          `${message}: ${YahooFinanceService.DELISTED_ERROR_MESSAGE}`
+        );
+      } else if (
+        (error?.name === 'HTTPError' &&
+          error?.code === StatusCodes.TOO_MANY_REQUESTS) ||
+        error?.message?.startsWith(YahooFinanceService.RATE_LIMIT_ERROR_MESSAGE)
+      ) {
+        this.logger.warn(
+          `${message}: ${YahooFinanceService.RATE_LIMIT_ERROR_MESSAGE}`
+        );
+      } else {
+        this.logger.error(`${message}: [${error?.name}]`);
+      }
+
+      return { dividends: [], mergers: [], splits: [] };
+    }
   }
 
   private convertToDividendResult(

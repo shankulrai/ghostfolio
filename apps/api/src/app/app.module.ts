@@ -48,6 +48,7 @@ import { AuthDevicesModule } from './endpoints/auth-devices/auth-devices.module'
 import { AuthModule } from './endpoints/auth/auth.module';
 import { BenchmarksModule } from './endpoints/benchmarks/benchmarks.module';
 import { CacheModule } from './endpoints/cache/cache.module';
+import { CorporateActionsModule } from './endpoints/corporate-actions/corporate-actions.module';
 import { GhostfolioModule } from './endpoints/data-providers/ghostfolio/ghostfolio.module';
 import { ExchangeRatesModule } from './endpoints/exchange-rates/exchange-rates.module';
 import { ExportModule } from './endpoints/export/export.module';
@@ -112,6 +113,7 @@ import { PortfolioModule } from './portfolio/portfolio.module';
     CacheModule,
     ConfigModule.forRoot(),
     ConfigurationModule,
+    CorporateActionsModule,
     CronModule,
     DataGatheringQueueModule,
     DataProviderModule,

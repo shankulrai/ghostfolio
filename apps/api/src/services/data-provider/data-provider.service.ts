@@ -384,6 +384,33 @@ export class DataProviderService implements OnModuleInit {
     });
   }
 
+  public async getCorporateActions({
+    dataSource,
+    from,
+    symbol,
+    to
+  }: {
+    from: Date;
+    to: Date;
+  } & AssetProfileIdentifier) {
+    if (!isValid(from) || !isValid(to)) {
+      return { dividends: [], mergers: [], splits: [] };
+    }
+
+    const provider = this.getDataProvider(DataSource[dataSource]);
+
+    if (!provider.getCorporateActions) {
+      return { dividends: [], mergers: [], splits: [] };
+    }
+
+    return provider.getCorporateActions({
+      from,
+      requestTimeout: ms('30 seconds'),
+      symbol,
+      to
+    });
+  }
+
   public async getHistorical({
     assetProfileIdentifiers,
     from,

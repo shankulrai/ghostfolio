@@ -9,12 +9,41 @@ import { Granularity } from '@ghostfolio/common/types';
 
 import { DataSource, SymbolProfile } from '@prisma/client';
 
+export interface CorporateActionSplit {
+  date: Date;
+  denominator: number;
+  numerator: number;
+}
+
+export interface CorporateActionDividend {
+  amountPerShare: number;
+  date: Date;
+}
+
+export interface CorporateActionMerger {
+  date: Date;
+  newSymbol: string;
+}
+
+export interface CorporateActionsResult {
+  dividends: CorporateActionDividend[];
+  mergers: CorporateActionMerger[];
+  splits: CorporateActionSplit[];
+}
+
 export interface DataProviderInterface {
   canHandle(symbol: string): boolean;
 
   getAssetProfile({
     symbol
   }: GetAssetProfileParams): Promise<Partial<SymbolProfile>>;
+
+  getCorporateActions?({
+    from,
+    requestTimeout,
+    symbol,
+    to
+  }: GetCorporateActionsParams): Promise<CorporateActionsResult>;
 
   getDataProviderInfo(): DataProviderInfo;
 
@@ -60,6 +89,13 @@ export interface DataProviderInterface {
 export interface GetAssetProfileParams {
   requestTimeout?: number;
   symbol: string;
+}
+
+export interface GetCorporateActionsParams {
+  from: Date;
+  requestTimeout?: number;
+  symbol: string;
+  to: Date;
 }
 
 export interface GetDividendsParams {

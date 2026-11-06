@@ -52,7 +52,7 @@ export class PortfolioChangedListener {
   }
 
   private async processPortfolioChanged({ userId }: { userId: string }) {
-    this.logger.log(`Portfolio of user '${userId}' has changed`);
+    this.logger.log('Portfolio has changed');
 
     try {
       await this.redisCacheService.removePortfolioSnapshotsByUserId({ userId });
@@ -94,8 +94,7 @@ export class PortfolioChangedListener {
       });
     } catch (error) {
       this.logger.error(
-        `Portfolio snapshot of user '${userId}' could not be recomputed`,
-        error
+        `Portfolio snapshot could not be recomputed: ${error?.name}`
       );
     }
   }

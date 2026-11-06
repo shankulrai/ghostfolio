@@ -247,4 +247,60 @@ describe('DataProviderService', () => {
       });
     });
   });
+
+  describe('getCorporateActions', () => {
+    it('returns empty arrays when from date is invalid', async () => {
+      const dataProviderService = createDataProviderService();
+      await dataProviderService.onModuleInit();
+
+      const result = await dataProviderService.getCorporateActions({
+        dataSource: DataSource.YAHOO,
+        from: new Date('invalid'),
+        symbol: 'AAPL',
+        to: new Date('2024-12-31')
+      });
+
+      expect(result).toEqual({
+        dividends: [],
+        mergers: [],
+        splits: []
+      });
+    });
+
+    it('returns empty arrays when to date is invalid', async () => {
+      const dataProviderService = createDataProviderService();
+      await dataProviderService.onModuleInit();
+
+      const result = await dataProviderService.getCorporateActions({
+        dataSource: DataSource.YAHOO,
+        from: new Date('2024-01-01'),
+        symbol: 'AAPL',
+        to: new Date('invalid')
+      });
+
+      expect(result).toEqual({
+        dividends: [],
+        mergers: [],
+        splits: []
+      });
+    });
+
+    it('returns empty arrays when provider does not implement getCorporateActions', async () => {
+      const dataProviderService = createDataProviderService();
+      await dataProviderService.onModuleInit();
+
+      const result = await dataProviderService.getCorporateActions({
+        dataSource: DataSource.MANUAL,
+        from: new Date('2024-01-01'),
+        symbol: 'AAPL',
+        to: new Date('2024-12-31')
+      });
+
+      expect(result).toEqual({
+        dividends: [],
+        mergers: [],
+        splits: []
+      });
+    });
+  });
 });

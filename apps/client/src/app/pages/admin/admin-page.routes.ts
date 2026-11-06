@@ -1,3 +1,4 @@
+import { GfAdminCorporateActionsComponent } from '@ghostfolio/client/components/admin-corporate-actions/admin-corporate-actions.component';
 import { GfAdminJobsComponent } from '@ghostfolio/client/components/admin-jobs/admin-jobs.component';
 import { GfAdminMarketDataComponent } from '@ghostfolio/client/components/admin-market-data/admin-market-data.component';
 import { GfAssetProfileDialogHostComponent } from '@ghostfolio/client/components/admin-market-data/asset-profile-dialog-host/asset-profile-dialog-host.component';
@@ -43,6 +44,11 @@ export const routes: Routes = [
         path: '',
         component: GfAdminOverviewComponent,
         title: internalRoutes.adminControl.title
+      },
+      {
+        path: internalRoutes.adminControl.subRoutes.corporateActions.path,
+        component: GfAdminCorporateActionsComponent,
+        title: internalRoutes.adminControl.subRoutes.corporateActions.title
       },
       {
         path: internalRoutes.adminControl.subRoutes.jobs.path,

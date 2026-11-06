@@ -58,6 +58,10 @@ import type { AssetProfilesResponse } from './responses/asset-profiles-response.
 import type { AssetResponse } from './responses/asset-response.interface';
 import type { BenchmarkMarketDataDetailsResponse } from './responses/benchmark-market-data-details-response.interface';
 import type { BenchmarkResponse } from './responses/benchmark-response.interface';
+import type {
+  CorporateActionEntry,
+  CorporateActionsResponse
+} from './responses/corporate-actions-response.interface';
 import type { CreateActivityResponse } from './responses/create-activity-response.interface';
 import type { CreateStripeCheckoutSessionResponse } from './responses/create-stripe-checkout-session-response.interface';
 import type { DataEnhancerHealthResponse } from './responses/data-enhancer-health-response.interface';
@@ -148,6 +152,8 @@ export {
   BenchmarkMarketDataDetailsResponse,
   BenchmarkProperty,
   BenchmarkResponse,
+  CorporateActionEntry,
+  CorporateActionsResponse,
   Coupon,
   CreateActivityResponse,
   CreateStripeCheckoutSessionResponse,

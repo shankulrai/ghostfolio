@@ -21,6 +21,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { addIcons } from 'ionicons';
 import {
+  businessOutline,
   flashOutline,
   peopleOutline,
   readerOutline,
@@ -57,6 +58,7 @@ export class AdminPageComponent {
       });
 
     addIcons({
+      businessOutline,
       flashOutline,
       peopleOutline,
       readerOutline,
@@ -86,6 +88,12 @@ export class AdminPageComponent {
         iconName: 'server-outline',
         label: internalRoutes.adminControl.subRoutes.marketData.title,
         routerLink: internalRoutes.adminControl.subRoutes.marketData.routerLink
+      },
+      {
+        iconName: 'business-outline',
+        label: internalRoutes.adminControl.subRoutes.corporateActions.title,
+        routerLink:
+          internalRoutes.adminControl.subRoutes.corporateActions.routerLink
       },
       hasPermissionToAccessBullBoard
         ? {
