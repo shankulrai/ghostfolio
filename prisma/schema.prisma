@@ -164,6 +164,33 @@ model AuthDevice {
   @@index([userId])
 }
 
+model CorporateActionEvent {
+  amountPerShare  Float?
+  appliedCount    Int           @default(0)
+  createdAt       DateTime      @default(now())
+  dataSource      DataSource
+  denominator     Int?
+  effectiveDate   DateTime
+  failedCount     Int           @default(0)
+  failureReason   String?
+  id              String        @id @default(uuid())
+  idempotencyKey  String        @unique
+  newSymbol       String?
+  numerator       Int?
+  processedAt     DateTime?
+  skippedCount    Int           @default(0)
+  status          String        @default("PENDING")
+  symbol          String
+  symbolProfile   SymbolProfile @relation(fields: [symbolProfileId], onDelete: Cascade, references: [id])
+  symbolProfileId String
+  type            String
+  updatedAt       DateTime      @updatedAt
+
+  @@index([effectiveDate])
+  @@index([status])
+  @@index([symbolProfileId, effectiveDate])
+}
+
 model MarketData {
   createdAt        DateTime        @default(now())
   dataSource       DataSource
@@ -235,6 +262,7 @@ model SymbolProfile {
   assetProfileSplits     AssetProfileSplit[]
   assetSubClass          AssetSubClass?
   comment                String?
+  corporateActionEvents  CorporateActionEvent[]
   countries              Json?
   createdAt              DateTime               @default(now())
   currency               String

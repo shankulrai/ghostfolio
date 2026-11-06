@@ -40,6 +40,18 @@
     </div>
   </div>
 
+  @if (corporateActionsEntries.length > 0) {
+    <div class="row mt-5">
+      <div class="col">
+        <h2 class="h4 mb-3" i18n>Corporate Actions</h2>
+        <gf-corporate-actions-table
+          [entries]="corporateActionsEntries"
+          [showCounts]="false"
+        />
+      </div>
+    </div>
+  }
+
   @if (hasPermissionToCreateActivity) {
     <gf-fab
       [routerLink]="

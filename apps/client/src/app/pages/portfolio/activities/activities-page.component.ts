@@ -6,12 +6,14 @@ import { downloadAsFile } from '@ghostfolio/common/helper';
 import {
   Activity,
   AssetProfileIdentifier,
+  CorporateActionEntry,
   User
 } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 import { internalRoutes } from '@ghostfolio/common/routes/routes';
 import { hasScope, scopes } from '@ghostfolio/common/scopes';
 import { GfActivitiesTableComponent } from '@ghostfolio/ui/activities-table';
+import { GfCorporateActionsTableComponent } from '@ghostfolio/ui/corporate-actions-table';
 import { GfFabComponent } from '@ghostfolio/ui/fab';
 import { DataService } from '@ghostfolio/ui/services';
 
@@ -43,6 +45,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     GfActivitiesTableComponent,
+    GfCorporateActionsTableComponent,
     GfFabComponent,
     MatSnackBarModule,
     RouterModule
@@ -52,6 +55,7 @@ import {
   templateUrl: './activities-page.html'
 })
 export class GfActivitiesPageComponent implements OnInit {
+  protected corporateActionsEntries: CorporateActionEntry[] = [];
   protected dataSource: MatTableDataSource<Activity> | undefined;
   protected deviceType: string;
   protected hasImpersonationId: boolean;
@@ -111,6 +115,7 @@ export class GfActivitiesPageComponent implements OnInit {
           }
 
           this.fetchActivities();
+          this.fetchCorporateActions();
 
           this.changeDetectorRef.markForCheck();
         }
@@ -330,6 +335,16 @@ export class GfActivitiesPageComponent implements OnInit {
           );
         }
 
+        this.changeDetectorRef.markForCheck();
+      });
+  }
+
+  private fetchCorporateActions() {
+    this.dataService
+      .fetchCorporateActions({ skip: 0, take: 50 })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ entries }) => {
+        this.corporateActionsEntries = entries;
         this.changeDetectorRef.markForCheck();
       });
   }

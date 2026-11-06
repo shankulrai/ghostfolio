@@ -6,18 +6,75 @@ import { AssetProfileSplitService } from './asset-profile-split.service';
 
 describe('AssetProfileSplitService', () => {
   let assetProfileSplitService: AssetProfileSplitService;
+  let create: jest.Mock;
   let deleteMany: jest.Mock;
   let findMany: jest.Mock;
   let upsert: jest.Mock;
 
   beforeEach(() => {
+    create = jest.fn();
     deleteMany = jest.fn();
     findMany = jest.fn();
     upsert = jest.fn();
 
     assetProfileSplitService = new AssetProfileSplitService({
-      assetProfileSplit: { deleteMany, findMany, upsert }
+      assetProfileSplit: { create, deleteMany, findMany, upsert }
     } as unknown as PrismaService);
+  });
+
+  describe('createIfAbsent', () => {
+    it('creates split when none exists and returns no conflict', async () => {
+      const date = new Date('2024-06-10T18:30:00.000Z');
+      const normalizedDate = new Date('2024-06-10T00:00:00.000Z');
+      const createdSplit = createStoredSplit('2024-06-10');
+
+      create.mockResolvedValue(createdSplit);
+
+      const result = await assetProfileSplitService.createIfAbsent({
+        date,
+        denominator: 1,
+        numerator: 4,
+        symbolProfileId: 'profile-id'
+      });
+
+      expect(result.conflict).toBe(false);
+      expect(result.split).toBe(createdSplit);
+      expect(create).toHaveBeenCalledWith({
+        data: {
+          date: normalizedDate,
+          denominator: 1,
+          numerator: 4,
+          symbolProfileId: 'profile-id'
+        }
+      });
+    });
+
+    it('reports conflict when split already exists and returns null split', async () => {
+      create.mockRejectedValue({ code: 'P2002' });
+
+      const result = await assetProfileSplitService.createIfAbsent({
+        date: new Date('2024-06-10'),
+        denominator: 1,
+        numerator: 2,
+        symbolProfileId: 'profile-id'
+      });
+
+      expect(result.conflict).toBe(true);
+      expect(result.split).toBeNull();
+    });
+
+    it('rethrows non-P2002 errors', async () => {
+      create.mockRejectedValue(new Error('Database connection lost'));
+
+      await expect(
+        assetProfileSplitService.createIfAbsent({
+          date: new Date('2024-06-10'),
+          denominator: 1,
+          numerator: 2,
+          symbolProfileId: 'profile-id'
+        })
+      ).rejects.toThrow('Database connection lost');
+    });
   });
 
   describe('deleteById', () => {

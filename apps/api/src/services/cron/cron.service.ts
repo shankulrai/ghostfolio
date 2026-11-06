@@ -1,5 +1,8 @@
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
+import { CorporateActionDetectionService } from '@ghostfolio/api/services/corporate-action/corporate-action-detection.service';
+import { CorporateActionTelemetry } from '@ghostfolio/api/services/corporate-action/corporate-action-telemetry';
 import { PropertyService } from '@ghostfolio/api/services/property/property.service';
+import { CorporateActionService } from '@ghostfolio/api/services/queues/corporate-action/corporate-action.service';
 import { DataGatheringService } from '@ghostfolio/api/services/queues/data-gathering/data-gathering.service';
 import { StatisticsGatheringService } from '@ghostfolio/api/services/queues/statistics-gathering/statistics-gathering.service';
 import { TwitterBotService } from '@ghostfolio/api/services/twitter-bot/twitter-bot.service';
@@ -22,6 +25,9 @@ export class CronService {
 
   public constructor(
     private readonly configurationService: ConfigurationService,
+    private readonly corporateActionDetectionService: CorporateActionDetectionService,
+    private readonly corporateActionService: CorporateActionService,
+    private readonly corporateActionTelemetry: CorporateActionTelemetry,
     private readonly dataGatheringService: DataGatheringService,
     private readonly propertyService: PropertyService,
     private readonly statisticsGatheringService: StatisticsGatheringService,
@@ -83,6 +89,31 @@ export class CronService {
         })
       );
     }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  public async runEveryDayAtOneAm() {
+    if (
+      !this.configurationService.get('ENABLE_FEATURE_CORPORATE_ACTIONS') ||
+      !(await this.isDataGatheringEnabled())
+    ) {
+      return;
+    }
+
+    const targets =
+      await this.corporateActionDetectionService.getDetectTargets();
+
+    this.corporateActionTelemetry.emitDetectRunSummary({
+      enqueuedCount: targets.length,
+      symbolsTotal: targets.length,
+      zeroIncluded: targets.length === 0
+    });
+
+    if (targets.length === 0) {
+      return;
+    }
+
+    await this.corporateActionService.enqueueDetectBatch(targets);
   }
 
   private async isDataGatheringEnabled() {

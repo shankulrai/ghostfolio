@@ -1,5 +1,4 @@
 import { PortfolioCalculatorFactory } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator.factory';
-import { PortfolioSnapshotValue } from '@ghostfolio/api/app/portfolio/interfaces/snapshot-value.interface';
 import { AccountBalanceService } from '@ghostfolio/api/services/account-balance/account-balance.service';
 import { ActivitiesService } from '@ghostfolio/api/services/activities/activities.service';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
@@ -43,9 +42,7 @@ export class PortfolioSnapshotProcessor {
     try {
       const startTime = performance.now();
 
-      this.logger.log(
-        `Portfolio snapshot calculation of user '${job.data.userId}' has been started`
-      );
+      this.logger.log('Portfolio snapshot calculation has been started');
 
       const { activities } =
         await this.activitiesService.getActivitiesForPortfolioCalculator({
@@ -74,7 +71,7 @@ export class PortfolioSnapshotProcessor {
       const snapshot = await portfolioCalculator.computeSnapshot();
 
       this.logger.log(
-        `Portfolio snapshot calculation of user '${job.data.userId}' has been completed in ${(
+        `Portfolio snapshot calculation has been completed in ${(
           (performance.now() - startTime) /
           1000
         ).toFixed(3)} seconds`
@@ -94,14 +91,14 @@ export class PortfolioSnapshotProcessor {
         JSON.stringify({
           expiration: expiration.getTime(),
           portfolioSnapshot: snapshot
-        } as unknown as PortfolioSnapshotValue),
+        }),
         CACHE_TTL_INFINITE
       );
 
       return snapshot;
     } catch (error) {
       this.logger.error(
-        `Portfolio snapshot calculation of user '${job.data.userId}' has failed: ${error.message}`
+        `Portfolio snapshot calculation has failed: ${error.message}`
       );
 
       throw new Error(error);

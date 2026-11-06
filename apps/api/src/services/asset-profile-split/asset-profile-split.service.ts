@@ -79,6 +79,39 @@ export class AssetProfileSplitService {
     });
   }
 
+  public async createIfAbsent({
+    date,
+    denominator,
+    numerator,
+    symbolProfileId
+  }: {
+    date: Date;
+    denominator: number;
+    numerator: number;
+    symbolProfileId: string;
+  }): Promise<{ conflict: boolean; split: AssetProfileSplit | null }> {
+    const dateOfSplit = resetHours(date);
+
+    try {
+      const split = await this.prismaService.assetProfileSplit.create({
+        data: {
+          date: dateOfSplit,
+          denominator,
+          numerator,
+          symbolProfileId
+        }
+      });
+
+      return { conflict: false, split };
+    } catch (error) {
+      if (error.code === 'P2002') {
+        return { conflict: true, split: null };
+      }
+
+      throw error;
+    }
+  }
+
   public async upsert({
     date,
     denominator,

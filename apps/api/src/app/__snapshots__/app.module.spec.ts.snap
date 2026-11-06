@@ -547,6 +547,22 @@ exports[`AppModule should keep the security of each route 1`] = `
       "portfolio:read",
     ],
   },
+  "GET /corporate-actions": {
+    "guards": [
+      "AuthGuard('jwt')",
+      "HasPermissionGuard",
+      "ImpersonationGuard",
+    ],
+    "interceptors": [],
+  },
+  "GET /corporate-actions/admin": {
+    "guards": [
+      "AuthGuard('jwt')",
+      "HasPermissionGuard",
+    ],
+    "interceptors": [],
+    "permission": "accessAdminControl",
+  },
   "GET /data-providers/ghostfolio/asset-profile/:symbol": {
     "guards": [
       "AuthGuard('api-key')",

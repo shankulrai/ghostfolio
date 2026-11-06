@@ -1,7 +1,12 @@
 import { ConfigurationModule } from '@ghostfolio/api/services/configuration/configuration.module';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
+import { CorporateActionDetectionService } from '@ghostfolio/api/services/corporate-action/corporate-action-detection.service';
+import { CorporateActionTelemetry } from '@ghostfolio/api/services/corporate-action/corporate-action-telemetry';
+import { CorporateActionModule } from '@ghostfolio/api/services/corporate-action/corporate-action.module';
 import { PropertyModule } from '@ghostfolio/api/services/property/property.module';
 import { PropertyService } from '@ghostfolio/api/services/property/property.service';
+import { CorporateActionQueueModule } from '@ghostfolio/api/services/queues/corporate-action/corporate-action.module';
+import { CorporateActionService } from '@ghostfolio/api/services/queues/corporate-action/corporate-action.service';
 import { DataGatheringQueueModule } from '@ghostfolio/api/services/queues/data-gathering/data-gathering.module';
 import { DataGatheringService } from '@ghostfolio/api/services/queues/data-gathering/data-gathering.service';
 import { StatisticsGatheringQueueModule } from '@ghostfolio/api/services/queues/statistics-gathering/statistics-gathering.module';
@@ -18,6 +23,8 @@ import { CronService } from './cron.service';
 @Module({
   imports: [
     ConfigurationModule,
+    CorporateActionModule,
+    CorporateActionQueueModule,
     DataGatheringQueueModule,
     PropertyModule,
     StatisticsGatheringQueueModule,
@@ -28,6 +35,9 @@ import { CronService } from './cron.service';
     {
       inject: [
         ConfigurationService,
+        CorporateActionDetectionService,
+        CorporateActionService,
+        CorporateActionTelemetry,
         DataGatheringService,
         PropertyService,
         StatisticsGatheringService,
@@ -37,6 +47,9 @@ import { CronService } from './cron.service';
       provide: CronService,
       useFactory: (
         configurationService: ConfigurationService,
+        corporateActionDetectionService: CorporateActionDetectionService,
+        corporateActionService: CorporateActionService,
+        corporateActionTelemetry: CorporateActionTelemetry,
         dataGatheringService: DataGatheringService,
         propertyService: PropertyService,
         statisticsGatheringService: StatisticsGatheringService,
@@ -51,6 +64,9 @@ import { CronService } from './cron.service';
 
         return new CronService(
           configurationService,
+          corporateActionDetectionService,
+          corporateActionService,
+          corporateActionTelemetry,
           dataGatheringService,
           propertyService,
           statisticsGatheringService,

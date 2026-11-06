@@ -39,6 +39,7 @@ import {
   AssetResponse,
   BenchmarkMarketDataDetailsResponse,
   BenchmarkResponse,
+  CorporateActionsResponse,
   CreateActivityResponse,
   CreateStripeCheckoutSessionResponse,
   DataProviderHealthResponse,
@@ -1037,5 +1038,53 @@ export class DataService {
 
       (window as any).info = info;
     });
+  }
+
+  public fetchCorporateActions({
+    skip,
+    take
+  }: {
+    skip?: number;
+    take?: number;
+  } = {}) {
+    let params = new HttpParams();
+
+    if (skip !== undefined) {
+      params = params.append('skip', skip);
+    }
+
+    if (take !== undefined) {
+      params = params.append('take', take);
+    }
+
+    return this.http.get<CorporateActionsResponse>(
+      '/api/v1/corporate-actions',
+      {
+        params
+      }
+    );
+  }
+
+  public fetchAdminCorporateActions({
+    skip,
+    take
+  }: {
+    skip?: number;
+    take?: number;
+  } = {}) {
+    let params = new HttpParams();
+
+    if (skip !== undefined) {
+      params = params.append('skip', skip);
+    }
+
+    if (take !== undefined) {
+      params = params.append('take', take);
+    }
+
+    return this.http.get<CorporateActionsResponse>(
+      '/api/v1/corporate-actions/admin',
+      { params }
+    );
   }
 }

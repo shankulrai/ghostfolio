@@ -54,6 +54,11 @@ export const internalRoutes = {
     path: 'admin',
     routerLink: ['/admin'],
     subRoutes: {
+      corporateActions: {
+        path: 'corporate-actions',
+        routerLink: ['/admin', 'corporate-actions'],
+        title: $localize`Corporate Actions`
+      },
       jobs: {
         path: 'jobs',
         routerLink: ['/admin', 'jobs'],

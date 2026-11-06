@@ -65,6 +65,24 @@ export const CACHE_TTL_INFINITE = 0;
 
 export const COMMENT_MAXIMUM_LENGTH = 2000;
 
+export const CORPORATE_ACTION_QUEUE = 'CORPORATE_ACTION_QUEUE';
+export const CORPORATE_ACTION_DETECT_JOB_NAME = 'CORPORATE_ACTION_DETECT';
+export const CORPORATE_ACTION_APPLY_JOB_NAME = 'CORPORATE_ACTION_APPLY';
+export const CORPORATE_ACTION_JOB_OPTIONS: JobOptions = {
+  attempts: 6,
+  backoff: {
+    delay: ms('1 minute'),
+    type: 'exponential'
+  },
+  removeOnComplete: true,
+  removeOnFail: true,
+  timeout: ms('5 minutes')
+};
+export const CORPORATE_ACTION_LOOKBACK_DAYS = 7;
+export const CORPORATE_ACTION_DIVIDEND_PROXIMITY_DAYS = 7;
+export const CORPORATE_ACTION_DETECT_STAGGER_MS = 1000;
+export const CORPORATE_ACTION_APPLY_BATCH_SIZE = 25;
+
 export const DATA_GATHERING_QUEUE = 'DATA_GATHERING_QUEUE';
 export const DATA_GATHERING_QUEUE_PRIORITY_HIGH = 1;
 export const DATA_GATHERING_QUEUE_PRIORITY_LOW = Number.MAX_SAFE_INTEGER;
